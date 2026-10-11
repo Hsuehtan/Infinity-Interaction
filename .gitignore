@@ -1,38 +1,32 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Local-only archives and raw acceptance evidence (not for public GitHub)
+/archive/
+/tasks/archive/
+/tasks/reports/
 
-# testing
-/coverage
-
-# next.js
-/.next/
-/.vinext/
-/out/
-
-# misc
-.DS_Store
+# Secrets, local accounts, backups and runtime state
+**/.env
+**/.env.*
+!**/.env.example
+**/.local/
+**/.acceptance/
+**/.aws/
+**/.DS_Store
 *.pem
+*.key
+*.log
+*.err
+*.dump
+*.backup
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# local environment
-.env*
-
-# deployment and generated files
-.vercel
-next-env.d.ts
-/dist/
-/.wrangler/
-/outputs/
-/work/
+# Dependencies, generated build output and machine-specific tooling
+**/node_modules/
+**/.next/
+**/coverage/
+**/dist/
+**/build/
+**/*.tsbuildinfo
+**/__pycache__/
+**/.codex/
+**/.agents/
+**/.idea/
+**/.vscode/

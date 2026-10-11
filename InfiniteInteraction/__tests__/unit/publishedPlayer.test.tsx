@@ -1,0 +1,46 @@
+import React,{act} from 'react';
+import {createRoot,type Root} from 'react-dom/client';
+import {afterEach,describe,it,expect,vi} from 'vitest';
+import {NextIntlClientProvider} from 'next-intl';
+import messages from '../../messages/zh-CN.json';
+import PublishedPlayer from '../../app/p/[versionId]/PublishedPlayer';
+import {useRuntimeSessionStore} from '../../app/_features/runtime-session/store';
+import {usePlayerStore} from '../../app/_store/usePlayerStore';
+import type {PlaybackSnapshot} from '../../shared/publishing';
+(globalThis as typeof globalThis&{IS_REACT_ACT_ENVIRONMENT:boolean}).IS_REACT_ACT_ENVIRONMENT=true;
+let root:Root|undefined,container:HTMLDivElement|undefined;
+afterEach(()=>{act(()=>root?.unmount());container?.remove();useRuntimeSessionStore.getState().stop();usePlayerStore.getState().reset();vi.restoreAllMocks();});
+const snapshot:PlaybackSnapshot={schemaVersion:1,title:'公开作品',ratio:'16:9',language:'zh-CN',graph:{nodes:[{id:'start',type:'start',position:{x:0,y:0},data:{type:'start',title:'开始',timeline:{version:2,duration:3,bookmarks:[],tracks:[{id:'media',type:'media',name:'Media',clips:[{id:'v',type:'video',assetId:'asset',src:'/api/published/version/assets/asset',enabled:true,startTime:0,duration:3}]}]}}},{id:'end',type:'end',position:{x:0,y:0},data:{type:'end',title:'结局'}}],edges:[{id:'e',source:'start',sourceHandle:'node:default',target:'end'}]}};
+const button=(label:string)=>[...document.querySelectorAll('button')].find(button=>button.textContent===label)!;
+describe('独立玩家播放入口',()=>{
+  it('keeps a failed media retry actionable until the network recovers',async()=>{
+    const play=vi.spyOn(HTMLMediaElement.prototype,'play').mockResolvedValue();
+    const load=vi.spyOn(HTMLMediaElement.prototype,'load').mockImplementation(()=>{});
+    vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(()=>{});
+    container=document.createElement('div');document.body.appendChild(container);root=createRoot(container);
+    await act(async()=>root!.render(<NextIntlClientProvider locale="zh-CN" messages={messages}><PublishedPlayer snapshot={snapshot}/></NextIntlClientProvider>));
+    await act(async()=>button('开始体验').click());
+    const video=document.querySelector('video')!;
+    Object.defineProperty(video,'error',{configurable:true,value:{code:2,message:'synthetic network failure'}});
+    await act(async()=>video.dispatchEvent(new Event('error')));
+    expect(document.body.textContent).toContain('播放未启动或媒体暂不可用');
+    play.mockRejectedValue(new DOMException('network unavailable','NetworkError'));
+    await act(async()=>button('重试播放与声音').click());
+    expect(load).toHaveBeenCalled();expect(document.body.textContent).toContain('播放未启动或媒体暂不可用');
+    expect(document.body.textContent).not.toContain('synthetic network failure');
+    play.mockResolvedValue();
+    await act(async()=>button('重试播放与声音').click());
+    expect(document.body.textContent).not.toContain('播放未启动或媒体暂不可用');
+    expect(useRuntimeSessionStore.getState().snapshot?.currentNodeId).toBe('start');
+  });
+  it('waits for a user gesture, offers media retry and returns to the landing page',async()=>{
+    const play=vi.spyOn(HTMLMediaElement.prototype,'play').mockRejectedValue(new DOMException('gesture','NotAllowedError'));
+    vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(()=>{});
+    container=document.createElement('div');document.body.appendChild(container);root=createRoot(container);
+    await act(async()=>root!.render(<NextIntlClientProvider locale="zh-CN" messages={messages}><PublishedPlayer snapshot={snapshot}/></NextIntlClientProvider>));
+    expect(play).not.toHaveBeenCalled();expect(useRuntimeSessionStore.getState().isActive).toBe(false);
+    await act(async()=>button('开始体验').click());expect(document.body.textContent).toContain('播放未启动或媒体暂不可用');expect(useRuntimeSessionStore.getState().snapshot?.currentNodeId).toBe('start');
+    play.mockResolvedValue();await act(async()=>button('重试播放与声音').click());expect(document.body.textContent).not.toContain('播放未启动或媒体暂不可用');
+    await act(async()=>button(messages.player.exit).click());expect(useRuntimeSessionStore.getState().isActive).toBe(false);expect(button('开始体验').disabled).toBe(false);
+  });
+});

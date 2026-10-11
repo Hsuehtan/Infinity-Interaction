@@ -1,0 +1,34 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createRequire } from 'node:module';
+import { requireCondition } from './errors';
+import { mediaLimits } from './assets';
+const exec = promisify(execFile);
+const requireModule = createRequire(import.meta.url);
+export async function probeMedia(file: string, expectedType: string, size: number) {
+  const binary = process.env.FFPROBE_PATH || (requireModule('ffprobe-static') as { path: string }).path;
+  const { stdout } = await exec(binary, ['-v','error','-max_alloc','67108864','-protocol_whitelist','file','-format_whitelist','mov,matroska,webm,mp3,wav,ogg,image2,png_pipe,jpeg_pipe,webp_pipe','-probesize','10000000','-analyzeduration','10000000','-show_format','-show_streams','-of','json',file], { timeout: 30_000, maxBuffer: 1_000_000, killSignal: 'SIGKILL' });
+  const probe = JSON.parse(stdout);
+  const streams = probe.streams as Array<Record<string, any>>;
+  requireCondition(Array.isArray(streams) && streams.length > 0 && streams.length <= 8, 415, 'INVALID_MEDIA', '无法识别媒体流。');
+  const video = streams.find(s => s.codec_type === 'video' && !s.disposition?.attached_pic);
+  const audio = streams.find(s => s.codec_type === 'audio');
+  const format = String(probe.format?.format_name ?? '');
+  const imageCodec = video && ({ png: 'image/png', mjpeg: 'image/jpeg', webp: 'image/webp' } as Record<string,string>)[video.codec_name];
+  const isImage = !!imageCodec && /^(png_pipe|jpeg_pipe|webp_pipe|image2)$/.test(format);
+  const type = isImage ? 'image' : video ? 'video' : audio ? 'audio' : '';
+  requireCondition(type === expectedType, 415, 'MEDIA_TYPE_MISMATCH', '文件实际内容与声明的媒体类型不一致。');
+  if (video) requireCondition(Number.isInteger(video.width) && Number.isInteger(video.height) && video.width > 0 && video.height > 0 && video.width <= 8192 && video.height <= 8192 && video.width*video.height <= 33554432, 415, 'INVALID_DIMENSIONS', '媒体尺寸超出支持范围。');
+  const duration = Number(probe.format?.duration ?? video?.duration ?? audio?.duration);
+  if (!isImage) requireCondition(Number.isFinite(duration) && duration > 0 && duration <= mediaLimits().maxSeconds, 415, 'INVALID_DURATION', '媒体时长无效或超出限制。');
+  const mp4 = format.includes('mov'), webm = format.includes('matroska');
+  if (type === 'video') requireCondition((mp4 && video?.codec_name === 'h264' && ['yuv420p','yuvj420p'].includes(video?.pix_fmt)) || (webm && ['vp8','vp9'].includes(video?.codec_name)), 415, 'UNSUPPORTED_CODEC', '视频请使用 H.264 MP4 或 VP8/VP9 WebM。');
+  if (audio) requireCondition(['aac','mp3','opus','vorbis','pcm_s16le','pcm_s24le','pcm_f32le'].includes(audio.codec_name), 415, 'UNSUPPORTED_CODEC', '音频编码暂不支持。');
+  const mime = isImage ? imageCodec : type === 'video' ? (mp4 ? 'video/mp4' : 'video/webm') : mp4 ? 'audio/mp4' : format.includes('mp3') ? 'audio/mpeg' : format.includes('wav') ? 'audio/wav' : format.includes('ogg') ? 'audio/ogg' : '';
+  requireCondition(mime, 415, 'UNSUPPORTED_CONTAINER', '媒体容器暂不支持。');
+  const decoder = process.env.FFMPEG_PATH || requireModule('ffmpeg-static') as string;
+  await exec(decoder, ['-v','error','-xerror','-nostdin','-max_alloc','67108864','-threads','1','-protocol_whitelist','file','-format_whitelist','mov,matroska,webm,mp3,wav,ogg,image2,png_pipe,jpeg_pipe,webp_pipe','-i',file,'-map','0:v?','-map','0:a?','-threads','1','-f','null','-'], { timeout: 60_000, maxBuffer: 1_000_000, killSignal: 'SIGKILL' });
+  const parseRate=(value:unknown)=>{const parts=String(value??'').split('/').map(Number);return parts.length===2&&parts[1]>0&&parts[0]>0?parts[0]/parts[1]:null;};
+  const fps=parseRate(video?.avg_frame_rate)??parseRate(video?.r_frame_rate);
+  return { size, mime, ...(video ? { width: video.width, height: video.height, videoCodec: video.codec_name,...(fps&&Number.isFinite(fps)?{fps}:{}) } : {}), ...(!isImage ? { duration } : {}), ...(audio ? { audioCodec: audio.codec_name, hasAudio: true } : { hasAudio: false }), verifiedAt: new Date().toISOString() };
+}

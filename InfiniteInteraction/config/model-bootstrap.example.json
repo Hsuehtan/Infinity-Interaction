@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "connections": [
+    {
+      "id": "00000000-0000-4000-8000-000000000026",
+      "config": {
+        "name": "兔子 API · MiniMax-H3",
+        "protocol": "tuzi-minimax-h3",
+        "baseUrl": "https://api.tu-zi.com",
+        "model": "MiniMax-H3",
+        "extraBody": {},
+        "enabled": false,
+        "isDefault": false
+      },
+      "credentialEnv": "TUZI_API_KEY"
+    }
+  ]
+}

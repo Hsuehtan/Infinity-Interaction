@@ -1,0 +1,32 @@
+name: infinite-interaction
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_USER: interaction
+      POSTGRES_PASSWORD: interaction_local_only
+      POSTGRES_DB: interaction
+    ports:
+      - '127.0.0.1:55432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U interaction -d interaction']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  storage:
+    image: dxflrs/garage:v2.3.0
+    command: ['/garage', 'server', '--single-node', '--default-bucket']
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: GK33333333333333333333333333333333
+      GARAGE_DEFAULT_SECRET_KEY: '2222222222222222222222222222222222222222222222222222222222222222'
+      GARAGE_DEFAULT_BUCKET: interaction-private
+    ports:
+      - '127.0.0.1:53900:3900'
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - storage_data:/var/lib/garage
+volumes:
+  storage_data:
+  postgres_data:

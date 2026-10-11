@@ -1,0 +1,67 @@
+# dependencies
+node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+.next/
+/out/
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+*.err
+raven-dev.log
+raven-dev.err
+raven-dev.log.err
+.openfmv-dev-server.json
+
+# local env files
+.env*.local
+.env
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+/shared/ipc-contract.js
+
+# editors
+.vscode
+.idea
+
+# raven custom
+.agents
+.trae/skills
+.cursor/skills
+doc
+docs
+reference/
+
+# tracked product specifications
+!docs/
+docs/*
+!docs/specs/
+docs/specs/*
+!docs/specs/openfmv-video-game-studio-mvp.md
+
+# Private one-shot supplier acceptance state
+.acceptance/
+
+# Local database backups and migration evidence
+.local/
